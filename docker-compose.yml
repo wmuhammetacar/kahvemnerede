@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kahvem
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kahvem_prod}
+      POSTGRES_DB: kahvemnerede
+    ports:
+      - "5440:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kahvem -d kahvemnerede"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "3080:3000"
+    environment:
+      DATABASE_URL: "postgresql://kahvem:${POSTGRES_PASSWORD:-kahvem_prod}@postgres:5432/kahvemnerede?schema=public"
+      SESSION_SECRET: ${SESSION_SECRET}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3080}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3080}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://$(hostname):3000/api/health || wget --no-verbose --tries=1 --spider http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_data:

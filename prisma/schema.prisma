@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CASHIER
+}
+
+enum OrderStatus {
+  WAITING
+  READY
+  COMPLETED
+}
+
+model Business {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  active         Boolean  @default(true)
+  logoUrl        String?
+  primaryColor   String?
+  trackingTitle  String?
+  readyMessage   String?
+  createdAt      DateTime @default(now())
+   updatedAt      DateTime @default(now()) @updatedAt
+  branches       Branch[]
+  auditLogs      AuditLog[]
+
+  @@index([slug])
+}
+
+model Branch {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+   slug       String   @unique
+  active     Boolean  @default(true)
+  timezone   String   @default("Europe/Istanbul")
+  createdAt  DateTime @default(now())
+  business   Business @relation(fields: [businessId], references: [id])
+  users      User[]
+  orders     Order[]
+
+  @@index([businessId])
+}
+
+model User {
+  id                String   @id @default(cuid())
+  branchId          String
+  email             String   @unique
+  passwordHash      String
+  role              Role     @default(CASHIER)
+  active            Boolean  @default(true)
+  mustChangePassword Boolean @default(false)
+  createdAt         DateTime @default(now())
+   updatedAt         DateTime @default(now()) @updatedAt
+  branch            Branch   @relation(fields: [branchId], references: [id])
+  sessions          Session[]
+
+  @@index([branchId])
+}
+
+model Session {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique
+  userId        String
+  userUpdatedAt DateTime
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model LoginAttempt {
+  key       String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  branchId      String
+  orderNumber   String
+  trackingToken String      @unique
+  status        OrderStatus @default(WAITING)
+  createdAt     DateTime    @default(now())
+  readyAt       DateTime?
+  completedAt   DateTime?
+  branch        Branch      @relation(fields: [branchId], references: [id])
+
+   // Active-only uniqueness is enforced by the partial SQL migration index.
+  @@index([branchId, status])
+  @@index([branchId, createdAt])
+  @@index([trackingToken])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  businessId String
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  business   Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([actorId])
+}
